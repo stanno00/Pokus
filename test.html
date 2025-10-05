@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sledovac investicii americkych politikov</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input, button, select { margin: 10px 0; padding: 8px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Sledovac investicii americkych politikov</h1>
+    <p>Zadaj API kluc z <a href="https://site.financialmodelingprep.com/register" target="_blank">Financial Modeling Prep</a> (bezplatny):</p>
+    <input type="text" id="apiKey" placeholder="Tvoj API kluc">
+    <button onclick="saveApiKey()">Ulozit kluc</button>
+    <p>Aktualny kluc: <span id="currentKey">Ziadny (uloz ho)</span></p>
+
+    <h2>Filtrovanie podla datumu</h2>
+    <label>Od: <input type="date" id="startDate"></label>
+    <label>Do: <input type="date" id="endDate"></label>
+    <button onclick="applyDateFilter()">Aplikovat filter</button>
+
+    <h2>Zobrazit vsetky transakcie</h2>
+    <select id="chamberAll">
+        <option value="senate">Senat</option>
+        <option value="house">Snemovna reprezentantov</option>
+    </select>
+    <button onclick="loadAllTransactions()">Zobrazit vsetky</button>
+
+    <h2>Vyhladavanie podla mena politika</h2>
+    <input type="text" id="politicianName" placeholder="Napíš meno, napr. Nancy Pelosi">
+    <select id="chamberName">
+        <option value="senate">Senat</option>
+        <option value="house">Snemovna reprezentantov</option>
+    </select>
+    <button onclick="searchByName()">Vyhladat</button>
+
+    <h2>Vyhladavanie podla symbolu akcie</h2>
+    <input type="text" id="stockSymbol" placeholder="Napíš symbol, napr. AAPL">
+    <select id="chamberSymbol">
+        <option value="senate">Senat</option>
+        <option value="house">Snemovna reprezentantov</option>
+    </select>
+    <button onclick="searchBySymbol()">Vyhladat</button>
+
+    <h2>Vysledky</h2>
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Politik</th>
+                <th>Datum transakcie</th>
+                <th>Symbol akcie</th>
+                <th>Typ (kupa/predaj)</th>
+                <th>Suma</th>
+                <th>Popis</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        // Nacitanie API kluca z localStorage
+        let apiKey = localStorage.getItem('fmpApiKey');
+        let lastData = []; // Ulozenie poslednych nacitanych dat pre filtrovanie
+        if (apiKey) {
+            document.getElementById('currentKey').innerText = apiKey;
+        }
+
+        function saveApiKey() {
+            apiKey = document.getElementById('apiKey').value;
+            if (apiKey) {
+                localStorage.setItem('fmpApiKey', apiKey);
+                document.getElementById('currentKey').innerText = apiKey;
+                alert('Kluc ulozeny!');
+            } else {
+                alert('Zadaj platny kluc.');
+            }
+        }
+
+        async function fetchData(endpoint) {
+            if (!apiKey) {
+                alert('Najprv zadaj a uloz API kluc!');
+                return [];
+            }
+            const url = `https://financialmodelingprep.com/api/v4/${endpoint}&apikey=${apiKey}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Chyba pri poziadavke: ' + response.status);
+                }
+                return await response.json();
+            } catch (error) {
+                alert('Chyba: ' + error.message + '. Skontroluj kluc alebo pripojenie.');
+                return [];
+            }
+        }
+
+        async function loadAllTransactions() {
+            const chamber = document.getElementById('chamberAll').value;
+            const endpoint = `${chamber}-trading?page=0`;
+            lastData = await fetchData(endpoint);
+            applyDateFilter();
+        }
+
+        async function searchByName() {
+            const name = document.getElementById('politicianName').value.trim();
+            const chamber = document.getElementById('chamberName').value;
+            if (!name) return alert('Zadaj meno politika.');
+
+            const endpoint = `${chamber}-trading?politicianName=${encodeURIComponent(name)}`;
+            lastData = await fetchData(endpoint);
+            applyDateFilter();
+        }
+
+        async function searchBySymbol() {
+            const symbol = document.getElementById('stockSymbol').value.trim().toUpperCase();
+            const chamber = document.getElementById('chamberSymbol').value;
+            if (!symbol) return alert('Zadaj symbol akcie.');
+
+            const endpoint = `${chamber}-trading?symbol=${symbol}`;
+            lastData = await fetchData(endpoint);
+            applyDateFilter();
+        }
+
+        function applyDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            let filteredData = lastData;
+
+            if (startDate || endDate) {
+                filteredData = lastData.filter(trade => {
+                    const tradeDate = trade.transaction_date;
+                    if (!tradeDate) return false;
+                    if (startDate && tradeDate < startDate) return false;
+                    if (endDate && tradeDate > endDate) return false;
+                    return true;
+                });
+            }
+
+            displayResults(filteredData);
+        }
+
+        function displayResults(data) {
+            const tbody = document.querySelector('#resultsTable tbody');
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">Ziadne vysledky najdene.</td></tr>';
+                return;
+            }
+            data.forEach(trade => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${trade.representative || 'N/A'}</td>
+                    <td>${trade.transaction_date || 'N/A'}</td>
+                    <td>${trade.ticker || 'N/A'}</td>
+                    <td>${trade.type || 'N/A'}</td>
+                    <td>${trade.range || 'N/A'}</td>
+                    <td>${trade.asset_description || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
