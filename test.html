@@ -48,6 +48,14 @@
     <button onclick="searchBySymbol()">Vyhladat</button>
 
     <h2>Vysledky</h2>
+    <label>Zobrazit pocet riadkov: 
+        <select id="displayLimitSelect" onchange="applyDateFilter()">
+            <option value="10">10</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">Vsetky</option>
+        </select>
+    </label>
     <table id="resultsTable">
         <thead>
             <tr>
@@ -65,7 +73,8 @@
     <script>
         // Nacitanie API kluca z localStorage
         let apiKey = localStorage.getItem('fmpApiKey');
-        let lastData = []; // Ulozenie poslednych nacitanych dat pre filtrovanie
+        let lastData = []; // Ulozenie poslednych nacitanych dat
+        let displayLimit = 10; // Default limit
         if (apiKey) {
             document.getElementById('currentKey').innerText = apiKey;
         }
@@ -86,15 +95,20 @@
                 alert('Najprv zadaj a uloz API kluc!');
                 return [];
             }
-            const url = `https://financialmodelingprep.com/api/v4/${endpoint}&apikey=${apiKey}`;
+            // Normalne volanie (pre hostovane appky)
+            let url = `https://financialmodelingprep.com/api/v4/${endpoint}&apikey=${apiKey}`;
+            
+            // Ak mas CORS problem lokálne, odkomentuj nasledujuci riadok (pouzi proxy)
+            // let url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://financialmodelingprep.com/api/v4/' + endpoint + '&apikey=' + apiKey)}`;
+
             try {
                 const response = await fetch(url);
                 if (!response.ok) {
-                    throw new Error('Chyba pri poziadavke: ' + response.status);
+                    throw new Error('Chyba pri poziadavke: ' + response.status + ' ' + response.statusText);
                 }
                 return await response.json();
             } catch (error) {
-                alert('Chyba: ' + error.message + '. Skontroluj kluc alebo pripojenie.');
+                alert('Chyba: ' + error.message + '. Skontroluj kluc, pripojenie alebo hostovanie appky.');
                 return [];
             }
         }
@@ -129,6 +143,9 @@
         function applyDateFilter() {
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
+            const limitSelect = document.getElementById('displayLimitSelect').value;
+            displayLimit = limitSelect === 'all' ? Infinity : parseInt(limitSelect);
+
             let filteredData = lastData;
 
             if (startDate || endDate) {
@@ -140,6 +157,9 @@
                     return true;
                 });
             }
+
+            // Aplikovat limit
+            filteredData = filteredData.slice(0, displayLimit);
 
             displayResults(filteredData);
         }
